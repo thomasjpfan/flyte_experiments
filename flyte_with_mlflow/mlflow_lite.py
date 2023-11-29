@@ -51,7 +51,7 @@ def evaluate_model(
     y_test: np.ndarray,
     mlflow_tracking_uri: str,
 ) -> str:
-    content = current_context()
+    context = current_context()
     y_pred = model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
 
@@ -64,7 +64,7 @@ def evaluate_model(
 
     # Start an MLflow run
     with mlflow.start_run(
-        run_name=str(content.execution_id),
+        run_name=str(context.execution_id.name),
         description=artifact_link,
     ) as run:
         mlflow.log_params(params)
