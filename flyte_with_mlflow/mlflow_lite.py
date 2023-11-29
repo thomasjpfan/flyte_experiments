@@ -1,4 +1,4 @@
-from flytekit import task, workflow
+from flytekit import task, workflow, current_context
 import mlflow
 from mlflow.models import infer_signature
 
@@ -6,6 +6,8 @@ from sklearn import datasets
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
+import numpy as np
+
 from flytekit import ImageSpec
 
 mlflow_spec = ImageSpec(
@@ -17,17 +19,17 @@ mlflow_spec = ImageSpec(
 )
 
 
-@task(container_image=mlflow_spec)
-def run_mlflow() -> str:
-    # Load the Iris dataset
+@task(container_image=mlflow_spec, cache=True, cache_version="1")
+def load_data() -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray):
     X, y = datasets.load_iris(return_X_y=True)
-
-    # Split the data into training and test sets
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
+    return X_train, X_test, y_train, y_test
 
-    # Define the model hyperparameters
+
+@task(container_image=mlflow_spec, cache=True, cache_version="1")
+def train_model(X_train: np.ndarray, y_train: np.ndarray) -> LogisticRegression:
     params = {
         "solver": "lbfgs",
         "max_iter": 1000,
@@ -39,45 +41,59 @@ def run_mlflow() -> str:
     lr = LogisticRegression(**params)
     lr.fit(X_train, y_train)
 
-    # Predict on the test set
-    y_pred = lr.predict(X_test)
+    return lr
 
-    # Calculate metrics
+
+@task(container_image=mlflow_spec)
+def evaluate_model(
+    model: LogisticRegression,
+    X_test: np.ndarray,
+    y_test: np.ndarray,
+    mlflow_tracking_uri: str,
+) -> str:
+    content = current_context()
+    y_pred = model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
 
-    # Set our tracking server uri for logging
-    uri = "http://192.168.1.210:5050/"
-    mlflow.set_tracking_uri(uri=uri)
+    mlflow.set_tracking_uri(uri=mlflow_tracking_uri)
+    experiment = mlflow.set_experiment("MLflow Scikit-learn")
 
-    # Create a new MLflow Experiment
-    experiment = mlflow.set_experiment("MLflow Quickstart")
+    params = model.get_params()
+
+    artifact_link = "[Artifact link](https://google.com)"
 
     # Start an MLflow run
-    with mlflow.start_run() as run:
-        # Log the hyperparameters
+    with mlflow.start_run(
+        run_name=str(content.execution_id),
+        description=artifact_link,
+    ) as run:
         mlflow.log_params(params)
-
-        # Log the loss metric
         mlflow.log_metric("accuracy", accuracy)
 
-        # Set a tag that we can use to remind ourselves what this run was for
         mlflow.set_tag("Training Info", "Basic LR model for iris data")
+        signature = infer_signature(X_test, y_pred)
 
-        # Infer the model signature
-        signature = infer_signature(X_train, lr.predict(X_train))
-
-        # Log the model
         mlflow.sklearn.log_model(
-            sk_model=lr,
+            sk_model=model,
             artifact_path="iris_model",
             signature=signature,
-            input_example=X_train,
+            input_example=X_test,
             registered_model_name="tracking-quickstart",
         )
 
-    return f"{uri}/#/experiments/{experiment.experiment_id}/runs/{run.info.run_id}"
+    return (
+        f"{mlflow_tracking_uri}/#/experiments/"
+        f"{experiment.experiment_id}/runs/{run.info.run_id}"
+    )
 
 
 @workflow
-def mlflow_workflow():
-    run_mlflow
+def mlflow_workflow(mlflow_tracking_uri: str) -> str:
+    X_train, X_test, y_train, y_test = load_data()
+    model = train_model(X_train=X_train, y_train=y_train)
+    return evaluate_model(
+        model=model,
+        X_test=X_test,
+        y_test=y_test,
+        mlflow_tracking_uri=mlflow_tracking_uri,
+    )

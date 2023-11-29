@@ -48,11 +48,11 @@ def _objective(trial):
         param["rate_drop"] = trial.suggest_float("rate_drop", 1e-8, 1.0, log=True)
         param["skip_drop"] = trial.suggest_float("skip_drop", 1e-8, 1.0, log=True)
 
-        bst = xgb.train(param, dtrain)
-        preds = bst.predict(dvalid)
-        pred_labels = (preds > 0).astype(np.int32)
-        accuracy = accuracy_score(y_valid, pred_labels)
-        return accuracy
+    bst = xgb.train(param, dtrain)
+    preds = bst.predict(dvalid)
+    pred_labels = (preds > 0).astype(np.int32)
+    accuracy = accuracy_score(y_valid, pred_labels)
+    return accuracy
 
 
 if __name__ == "__main__":
