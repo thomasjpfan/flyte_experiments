@@ -58,13 +58,22 @@ def evaluate_model(
     mlflow.set_tracking_uri(uri=mlflow_tracking_uri)
     experiment = mlflow.set_experiment("MLflow Scikit-learn")
 
+    execution_id = context.execution_id
+
+    workflow_url = (
+        "http://localhost:30080/console"
+        f"/projects/{execution_id.project}/"
+        f"domains/{execution_id.domain}/"
+        f"executions/{execution_id.name}"
+    )
+
     params = model.get_params()
 
-    artifact_link = "[Artifact link](https://scikit-learn.org)"
+    artifact_link = f"[Flyte Workflow Link]({workflow_url})"
 
     # Start an MLflow run
     with mlflow.start_run(
-        run_name=str(context.execution_id.name),
+        run_name=str(execution_id.name),
         description=artifact_link,
     ) as run:
         mlflow.log_params(params)
