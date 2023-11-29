@@ -69,12 +69,13 @@ def evaluate_model(
 
     params = model.get_params()
 
-    artifact_link = f"[Flyte Workflow Link]({workflow_url})"
+    description = f"[Flyte Workflow Link]({workflow_url})"
 
     # Start an MLflow run
     with mlflow.start_run(
         run_name=str(execution_id.name),
-        description=artifact_link,
+        description=description,
+        tags={"workflow_url": workflow_url},
     ) as run:
         mlflow.log_params(params)
         mlflow.log_metric("accuracy", accuracy)
