@@ -10,7 +10,8 @@ from optuna.study.study import ObjectiveFuncType
 from sklearn.model_selection import train_test_split
 from sklearn.datasets import load_breast_cancer
 from sklearn.metrics import accuracy_score
-from flytekit import task, workflow, ImageSpec, current_context
+from flytekit import task, workflow, ImageSpec, current_context, Deck
+from flytekitplugins.deck.renderer import MarkdownRenderer
 from flytekit.types.file import FlyteFile
 from optuna.integration.mlflow import MLflowCallback
 
@@ -86,6 +87,7 @@ def search_for_best_params(
     y: np.ndarray,
     mlflow_tracking_uri: str,
     experiment_name: str,
+    n_trials: int,
 ) -> (FlyteFile, float, str):
     X_train, X_valid, y_train, y_valid = train_test_split(
         X, y, test_size=0.2, random_state=0
@@ -121,7 +123,7 @@ def search_for_best_params(
             mlflow_kwargs={"nested": True},
         )
         study = optuna.create_study(direction="maximize")
-        study.optimize(objective, n_trials=10, timeout=600, callbacks=[mlflc])
+        study.optimize(objective, n_trials=n_trials, timeout=600, callbacks=[mlflc])
 
     best_trial = study.best_trial
     best_params = best_trial.params
@@ -135,7 +137,7 @@ def search_for_best_params(
     return json_path, best_trial.value, run.info.run_id
 
 
-@task(container_image=xgboost_spec)
+@task(container_image=xgboost_spec, enable_deck=True)
 def train_full_model(
     mlflow_tracking_uri: str,
     experiment_name: str,
@@ -180,20 +182,25 @@ def train_full_model(
     model_path = Path(context.working_directory) / "best_model.json"
     bst.save_model(model_path)
 
-    return model_path, (
+    mlflow_url = (
         f"{mlflow_tracking_uri}/#/experiments/"
         f"{experiment.experiment_id}/runs/{run.info.run_id}"
     )
 
+    Deck("MLFlow", MarkdownRenderer().to_html(f"[MLFlow url]({mlflow_url})"))
+
+    return (model_path, mlflow_url)
+
 
 @workflow
-def run_workflow(mlflow_tracking_uri: str, experiment_name: str):
+def run_workflow(mlflow_tracking_uri: str, experiment_name: str, n_trials: int):
     X, y = get_data()
     best_params, best_metric, run_id = search_for_best_params(
         X=X,
         y=y,
         mlflow_tracking_uri=mlflow_tracking_uri,
         experiment_name=experiment_name,
+        n_trials=n_trials,
     )
     train_full_model(
         mlflow_tracking_uri=mlflow_tracking_uri,
