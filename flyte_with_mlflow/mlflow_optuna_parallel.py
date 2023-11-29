@@ -81,7 +81,7 @@ def _objective(
     return accuracy
 
 
-@task(container_image=xgboost_spec)
+@task(container_image=xgboost_spec, enable_deck=True)
 def search_for_best_params(
     X: np.ndarray,
     y: np.ndarray,
@@ -109,7 +109,7 @@ def search_for_best_params(
     description = f"[Flyte Workflow Link]({workflow_url})"
 
     mlflow.set_tracking_uri(uri=mlflow_tracking_uri)
-    mlflow.set_experiment(experiment_name=experiment_name)
+    experiment = mlflow.set_experiment(experiment_name=experiment_name)
 
     with mlflow.start_run(
         run_name=str(execution_id.name),
@@ -124,6 +124,9 @@ def search_for_best_params(
         )
         study = optuna.create_study(direction="maximize")
         study.optimize(objective, n_trials=n_trials, timeout=600, callbacks=[mlflc])
+
+    experiment_url = f"{mlflow_tracking_uri}/#/experiments/{experiment.experiment_id}"
+    Deck("MLFlow", MarkdownRenderer().to_html(f"## [MLFlow url]({experiment_url})"))
 
     best_trial = study.best_trial
     best_params = best_trial.params
@@ -187,7 +190,7 @@ def train_full_model(
         f"{experiment.experiment_id}/runs/{run.info.run_id}"
     )
 
-    Deck("MLFlow", MarkdownRenderer().to_html(f"[MLFlow url]({mlflow_url})"))
+    Deck("MLFlow", MarkdownRenderer().to_html(f"## [MLFlow url]({mlflow_url})"))
 
     return (model_path, mlflow_url)
 
