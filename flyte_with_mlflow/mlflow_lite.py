@@ -12,9 +12,9 @@ from flytekit import ImageSpec
 
 mlflow_spec = ImageSpec(
     name="flyte_playground",
-    base_image="ghcr.io/flyteorg/flytekit:py3.10-1.10.0",
+    base_image="ghcr.io/flyteorg/flytekit:py3.11-1.10.1",
     packages=["mlflow", "scikit-learn"],
-    python_version="3.10",
+    python_version="3.11",
     registry="ghcr.io/thomasjpfan",
 )
 
@@ -60,7 +60,7 @@ def evaluate_model(
 
     params = model.get_params()
 
-    artifact_link = "[Artifact link](https://google.com)"
+    artifact_link = "[Artifact link](https://scikit-learn.org)"
 
     # Start an MLflow run
     with mlflow.start_run(
