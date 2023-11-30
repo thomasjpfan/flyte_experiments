@@ -120,13 +120,10 @@ def search_for_best_params(
             tracking_uri=mlflow_tracking_uri,
             metric_name="accuracy",
             create_experiment=False,
-            mlflow_kwargs={"nested": True},
+            mlflow_kwargs={"nested": True, "run_name": str(execution_id.name)},
         )
         study = optuna.create_study(direction="maximize")
         study.optimize(objective, n_trials=n_trials, timeout=600, callbacks=[mlflc])
-
-    experiment_url = f"{mlflow_tracking_uri}/#/experiments/{experiment.experiment_id}"
-    Deck("MLFlow", MarkdownRenderer().to_html(f"## [MLFlow url]({experiment_url})"))
 
     best_trial = study.best_trial
     best_params = best_trial.params
@@ -136,6 +133,18 @@ def search_for_best_params(
 
     with json_path.open("w") as f:
         json.dump(best_params, f)
+
+    experiment_url = (
+        f"{mlflow_tracking_uri}/#/experiments/{experiment.experiment_id}"
+        f"?searchFilter=attributes.run_name%20%3D%20%22{str(execution_id.name)}%22"
+    )
+
+    context.decks.insert(
+        0,
+        Deck(
+            "MLFlow", MarkdownRenderer().to_html(f"## [MLFlow url]({experiment_url})")
+        ),
+    )
 
     return json_path, best_trial.value, run.info.run_id
 
@@ -190,7 +199,9 @@ def train_full_model(
         f"{experiment.experiment_id}/runs/{run.info.run_id}"
     )
 
-    Deck("MLFlow", MarkdownRenderer().to_html(f"## [MLFlow url]({mlflow_url})"))
+    context.decks.insert(
+        0, Deck("MLFlow", MarkdownRenderer().to_html(f"## [MLFlow url]({mlflow_url})"))
+    )
 
     return (model_path, mlflow_url)
 
